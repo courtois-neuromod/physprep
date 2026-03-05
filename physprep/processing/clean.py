@@ -182,7 +182,12 @@ def preprocess_signal(signal, preprocessing_strategy, sampling_rate=1000):
         print(f"...Applying {step['step']}\n")
         if step["step"] == "filtering":
             if step["parameters"]["method"] == "notch":
-                signal = comb_band_stop(signal, sampling_rate, step["parameters"])
+                if step["parameters"]["notch_method"] in ["bottenhorn", "biopac"]:
+                    signal = comb_band_stop(signal, sampling_rate, step["parameters"])
+                elif step["parameters"]["notch_method"] == 'scipy':
+                    signal = notch_filter(signal, step["parameters"], sampling_rate)
+                else:
+                    raise ValueError('Invalid value for `notch_method`. Needs to be "bottenhorn", "biopac" or "scipy"')
             elif step["parameters"]["method"] == "median":
                 signal = median_filter(signal, step["parameters"], sampling_rate)
             else:
@@ -269,7 +274,7 @@ def comb_band_stop(data, sampling_rate, params):
 
 def median_filter(data, params, sampling_rate):
     """
-    Series of notch filters aligned with the scanner gradient's harmonics.
+    Apply scipy median filter function on the data.
 
     Parameters
     ----------
@@ -303,3 +308,30 @@ def median_filter(data, params, sampling_rate):
         window_size += 1
         
     return signal.medfilt(data, kernel_size=window_size)
+
+def notch_filter(data, params, sampling_rate):
+    """
+    Apply scipy second-order IIR notch filter on the data.
+
+    Parameters
+    ----------
+    data : array
+        The signal to be filtered.
+    params : dict
+        The parameters for the notch filtering (i.e. `w0` and `Q`).
+    sampling_rate : float
+        The sampling frequency of `signal` (in Hz, i.e., samples/second).
+
+    Returns
+    -------
+    filtered : array
+        The filtered signal.
+
+    See also
+    --------
+    https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.iirnotch.html
+    """
+    b, a = signal.iirnotch(params['w0'], params['Q'], sampling_rate)
+    data = signal.filtfilt(b, a, data)
+
+    return data
